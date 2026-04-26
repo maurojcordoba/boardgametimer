@@ -745,7 +745,7 @@
     }
 
     function updateCurrentPlayerClock() {
-      const card = $('playersList').children[state.current];
+      const card = $('playersList').querySelector(`.player-card[data-player-index="${state.current}"]`);
       if (!card) return;
       const clock = card.querySelector('.player-clock');
       const seconds = state.timers[state.current];
