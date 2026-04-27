@@ -1,4 +1,4 @@
-const CACHE_NAME = 'board-game-timer-pwa-v2';
+const CACHE_NAME = location.pathname;
 const APP_SHELL = [
   './',
   './index.html',
