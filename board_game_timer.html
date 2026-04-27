@@ -83,6 +83,31 @@
     .setup-scroll{display:flex;flex-direction:column;gap:10px;overflow:auto;padding-bottom:12px}
 
     .player-editor-list{display:flex;flex-direction:column;gap:8px}
+    .group-manager{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .group-row{
+      display:grid;
+      grid-template-columns:1fr auto auto;
+      gap:8px;
+      align-items:center;
+    }
+    .group-select{
+      width:100%;
+      background:var(--surface3);
+      border:1px solid var(--border);
+      border-radius:12px;
+      color:var(--text);
+      padding:10px 12px;
+      font-size:15px;
+    }
+    .group-actions{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:8px;
+    }
     .player-editor{
       display:grid;
       grid-template-columns:auto 1fr auto auto;
@@ -425,6 +450,26 @@
 
         <div class="config-card">
           <div class="config-row">
+            <span class="config-label">Grupos de jugadores</span>
+            <span class="inline-note">Guardar y cargar</span>
+          </div>
+          <div class="group-manager">
+            <div class="group-row">
+              <input class="name-input" id="groupNameInput" type="text" maxlength="24" placeholder="Nombre del grupo">
+              <button class="overlay-btn primary" id="saveGroupBtn" type="button">Guardar</button>
+              <button class="overlay-btn" id="updateGroupBtn" type="button">Actualizar</button>
+            </div>
+            <div class="group-row" style="grid-template-columns:1fr auto auto">
+              <select class="group-select" id="groupSelect" aria-label="Seleccionar grupo guardado"></select>
+              <button class="overlay-btn" id="loadGroupBtn" type="button">Cargar</button>
+              <button class="overlay-btn" id="deleteGroupBtn" type="button">Borrar</button>
+            </div>
+            <div class="inline-note" id="groupStatus">Sin grupos guardados</div>
+          </div>
+        </div>
+
+        <div class="config-card">
+          <div class="config-row">
             <span class="config-label">Nombres, orden y color</span>
             <span class="inline-note">Editables</span>
           </div>
@@ -499,10 +544,12 @@
   </div>
 
   <script>
-    const DEFAULT_COLORS = ['#f0c040','#e07b30','#2ecc71','#3498db','#9b59b6','#e74c3c','#1abc9c','#e91e63'];
+    const DEFAULT_COLORS = ['#0000FF','#008000','#FF0000','#FFFFFF','#000000','#FFFF00','#FFC0CB','#FFA500'];
     const DEFAULT_NAMES = ['Jugador 1','Jugador 2','Jugador 3','Jugador 4','Jugador 5','Jugador 6','Jugador 7','Jugador 8'];
     const MAX_PLAYERS = 8;
-    const APP_VERSION = 'v1.0.5';
+    const APP_VERSION = 'v1.0.6';
+    const GROUPS_STORAGE_KEY = 'bgt.savedGroups.v1';
+    const MAX_GROUPS = 30;
 
     const cfg = {
       time: 3 * 60,
@@ -524,7 +571,9 @@
       turnCount: [],
       timeoutCount: [],
       timeoutFeed: [],
-      flashId: null
+      flashId: null,
+      savedGroups: [],
+      selectedGroupId: null
     };
 
     let ticker = null;
@@ -572,7 +621,176 @@
         buttonWrap.appendChild(btn);
       }
 
+      loadSavedGroups();
+      renderSavedGroups();
       renderPlayerEditors();
+    }
+
+    function loadSavedGroups() {
+      try {
+        const raw = localStorage.getItem(GROUPS_STORAGE_KEY);
+        if (!raw) {
+          state.savedGroups = [];
+          return;
+        }
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) {
+          state.savedGroups = [];
+          return;
+        }
+        state.savedGroups = parsed
+          .map(group => sanitizeGroup(group))
+          .filter(Boolean);
+      } catch (error) {
+        state.savedGroups = [];
+      }
+    }
+
+    function sanitizeGroup(group) {
+      if (!group || typeof group !== 'object') return null;
+      const label = String(group.label || '').trim();
+      if (!label) return null;
+      if (!Array.isArray(group.players)) return null;
+      const players = group.players
+        .slice(0, MAX_PLAYERS)
+        .map((player, index) => ({
+          name: String(player?.name || '').trim() || DEFAULT_NAMES[index],
+          color: normalizeColor(player?.color, DEFAULT_COLORS[index])
+        }));
+      if (players.length < 2) return null;
+      return {
+        id: String(group.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`),
+        label,
+        players
+      };
+    }
+
+    function normalizeColor(value, fallback) {
+      const hex = typeof value === 'string' ? value.trim() : '';
+      return /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : fallback;
+    }
+
+    function persistSavedGroups() {
+      localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(state.savedGroups));
+    }
+
+    function renderSavedGroups() {
+      const select = $('groupSelect');
+      select.innerHTML = '';
+      if (state.savedGroups.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No hay grupos';
+        select.appendChild(option);
+        select.value = '';
+        state.selectedGroupId = null;
+        $('groupStatus').textContent = 'Sin grupos guardados';
+        return;
+      }
+
+      state.savedGroups.forEach(group => {
+        const option = document.createElement('option');
+        option.value = group.id;
+        option.textContent = `${group.label} (${group.players.length})`;
+        select.appendChild(option);
+      });
+
+      if (!state.savedGroups.some(group => group.id === state.selectedGroupId)) {
+        state.selectedGroupId = state.savedGroups[0].id;
+      }
+      select.value = state.selectedGroupId;
+      const selectedGroup = getSelectedGroup();
+      $('groupNameInput').value = selectedGroup ? selectedGroup.label : '';
+      $('groupStatus').textContent = selectedGroup
+        ? `Grupo seleccionado: ${selectedGroup.label}`
+        : 'Selecciona un grupo';
+    }
+
+    function getSelectedGroup() {
+      return state.savedGroups.find(group => group.id === state.selectedGroupId) || null;
+    }
+
+    function snapshotCurrentPlayers() {
+      return activePlayers().map((player, index) => ({
+        name: String(player.name || '').trim() || DEFAULT_NAMES[index],
+        color: normalizeColor(player.color, DEFAULT_COLORS[index])
+      }));
+    }
+
+    function makeGroupId() {
+      return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
+
+    function saveNewGroup() {
+      const label = $('groupNameInput').value.trim();
+      if (!label) {
+        $('groupStatus').textContent = 'Ingresa un nombre para guardar el grupo';
+        return;
+      }
+      if (state.savedGroups.length >= MAX_GROUPS) {
+        $('groupStatus').textContent = `Limite alcanzado (${MAX_GROUPS} grupos)`;
+        return;
+      }
+
+      const newGroup = {
+        id: makeGroupId(),
+        label,
+        players: snapshotCurrentPlayers()
+      };
+      state.savedGroups.push(newGroup);
+      state.selectedGroupId = newGroup.id;
+      persistSavedGroups();
+      renderSavedGroups();
+      $('groupStatus').textContent = `Grupo guardado: ${label}`;
+    }
+
+    function updateSelectedGroup() {
+      const selected = getSelectedGroup();
+      if (!selected) {
+        $('groupStatus').textContent = 'Primero selecciona un grupo para actualizar';
+        return;
+      }
+      const label = $('groupNameInput').value.trim() || selected.label;
+      selected.label = label;
+      selected.players = snapshotCurrentPlayers();
+      persistSavedGroups();
+      renderSavedGroups();
+      $('groupStatus').textContent = `Grupo actualizado: ${label}`;
+    }
+
+    function loadSelectedGroup() {
+      const selected = getSelectedGroup();
+      if (!selected) {
+        $('groupStatus').textContent = 'No hay grupo seleccionado para cargar';
+        return;
+      }
+      cfg.players = selected.players.length;
+      selected.players.forEach((savedPlayer, index) => {
+        playerSetup[index].name = savedPlayer.name;
+        playerSetup[index].color = normalizeColor(savedPlayer.color, DEFAULT_COLORS[index]);
+      });
+      for (let index = selected.players.length; index < MAX_PLAYERS; index++) {
+        playerSetup[index].name = DEFAULT_NAMES[index];
+        playerSetup[index].color = DEFAULT_COLORS[index];
+      }
+      $('playersVal').textContent = String(cfg.players);
+      renderPlayerCountButtons();
+      renderPlayerEditors();
+      $('groupNameInput').value = selected.label;
+      $('groupStatus').textContent = `Grupo cargado: ${selected.label}`;
+    }
+
+    function deleteSelectedGroup() {
+      const selected = getSelectedGroup();
+      if (!selected) {
+        $('groupStatus').textContent = 'No hay grupo seleccionado para borrar';
+        return;
+      }
+      state.savedGroups = state.savedGroups.filter(group => group.id !== selected.id);
+      state.selectedGroupId = state.savedGroups[0]?.id || null;
+      persistSavedGroups();
+      renderSavedGroups();
+      $('groupStatus').textContent = `Grupo borrado: ${selected.label}`;
     }
 
     function renderPlayerCountButtons() {
@@ -945,6 +1163,18 @@
     });
 
     $('startBtn').addEventListener('click', startGame);
+    $('groupSelect').addEventListener('change', event => {
+      state.selectedGroupId = event.target.value || null;
+      const selected = getSelectedGroup();
+      $('groupNameInput').value = selected ? selected.label : '';
+      $('groupStatus').textContent = selected
+        ? `Grupo seleccionado: ${selected.label}`
+        : 'Selecciona un grupo';
+    });
+    $('saveGroupBtn').addEventListener('click', saveNewGroup);
+    $('updateGroupBtn').addEventListener('click', updateSelectedGroup);
+    $('loadGroupBtn').addEventListener('click', loadSelectedGroup);
+    $('deleteGroupBtn').addEventListener('click', deleteSelectedGroup);
     $('pauseBtn').addEventListener('click', () => togglePause());
     $('resumeBtn').addEventListener('click', () => togglePause(false));
     $('settingsBtn').addEventListener('click', () => togglePause(true));
