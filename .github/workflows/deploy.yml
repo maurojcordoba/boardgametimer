@@ -12,14 +12,12 @@ jobs:
 
     steps:
       - name: Checkout branch
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Copy files
         run: |
-          mkdir public
-          cp -r * public/
-          rm -rf public/.git
-          rm -rf public/.github
+         mkdir public
+         rsync -av --exclude=public --exclude=.git --exclude=.github ./ public/
 
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v3
