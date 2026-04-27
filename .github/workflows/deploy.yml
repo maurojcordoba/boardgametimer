@@ -3,7 +3,7 @@ name: Deploy Preview Versions
 on:
   push:
     branches:
-      - test*
+      - test-*
       - feature/*
 
 jobs:
