@@ -341,18 +341,23 @@
       inset:0;
       background:rgba(8,10,14,.76);
       display:none;
-      align-items:end;
+      align-items:center;
       justify-content:center;
       padding:12px;
       z-index:30;
+      overflow-y:auto;
     }
     .overlay.show{display:flex}
     .overlay-card{
       width:min(720px,100%);
+      max-height:calc(100dvh - 24px);
       padding:16px;
       display:flex;
       flex-direction:column;
       gap:12px;
+      overflow-y:auto;
+      overscroll-behavior:contain;
+      -webkit-overflow-scrolling:touch;
     }
     .overlay-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
     .overlay-title{font-size:20px;font-weight:700;color:var(--accent);letter-spacing:1px;text-transform:uppercase}
@@ -406,6 +411,12 @@
       .player-editor{grid-template-columns:auto 1fr auto}
       .move-col{grid-column:2 / 4;flex-direction:row;justify-content:flex-end}
       .player-name{text-wrap:pretty}
+      .overlay{padding:10px}
+      .overlay-card{
+        width:100%;
+        max-height:calc(100dvh - 20px);
+        padding:12px;
+      }
     }
   </style>
 </head>
