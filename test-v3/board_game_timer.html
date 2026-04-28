@@ -44,7 +44,12 @@
     #setup,#app{min-height:calc(100vh - 24px);min-height:calc(100dvh - 24px);display:flex;flex-direction:column;gap:10px}
     #app{display:none;min-height:0;flex:1;overflow-y:auto;padding-bottom:10px}
     #app.turn-focus{
-      padding-bottom:0;
+      position:fixed;
+      inset:0;
+      z-index:15;
+      min-height:100vh;
+      min-height:100dvh;
+      padding:0;
       gap:0;
       overflow:hidden;
     }
@@ -221,14 +226,14 @@
     #app.turn-focus #playersList{
       height:100vh;
       height:100dvh;
-      overflow-y:auto;
-      overscroll-behavior-y:contain;
-      -webkit-overflow-scrolling:touch;
-      scroll-snap-type:y mandatory;
+      overflow:hidden;
       gap:0;
       grid-template-columns:1fr !important;
       grid-auto-rows:100vh;
       grid-auto-rows:100dvh;
+    }
+    #app.turn-focus #playersList .player-card:not(.active){
+      display:none;
     }
     #playersList.has-active-focus .player-card:not(.active){
       min-height:96px;
