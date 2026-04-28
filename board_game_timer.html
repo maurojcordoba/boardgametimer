@@ -545,7 +545,7 @@
 
         <div class="config-card">
           <div class="config-row">
-            <span class="config-label">Nombres, orden y color</span>
+            <span class="config-label">Nombres y color</span>
             <span class="inline-note">Editables</span>
           </div>
           <div class="player-editor-list" id="playerEditorList"></div>
@@ -566,10 +566,18 @@
       </div>
 
       <div class="status-wrap">
-        <div class="status-bar" id="statusBar">Turno de Jugador 1</div>
         <div class="summary-card">
           <div class="summary-label">Tiempos agotados</div>
           <div class="summary-value" id="totalTimeouts">0</div>
+        </div>
+        <div class="status-bar" id="statusBar">Toca el nombre de un jugador para iniciar su turno</div>
+      </div>
+
+      <div class="status-wrap">
+        <div class="status-bar" id="activeClockBar">--:-- · Sin turno activo</div>
+        <div class="summary-card">
+          <div class="summary-label">Jugador activo</div>
+          <div class="summary-value" id="activePlayerLabel">Ninguno</div>
         </div>
       </div>
 
@@ -614,18 +622,9 @@
           <div class="wake-text">En dispositivos compatibles se solicita Wake Lock para evitar que la pantalla se apague mientras la partida esta corriendo.</div>
           <button class="overlay-btn primary" id="resumeBtn">Reanudar</button>
         </div>
-
-        <div class="setting-card" style="grid-column:1 / -1">
-          <div class="config-row">
-            <span class="config-label">Orden de turnos</span>
-            <span class="inline-note">Editable en pausa</span>
-          </div>
-          <div class="player-editor-list" id="pauseOrderList"></div>
-        </div>
       </div>
     </div>
   </div>
-
   <script>
     const DEFAULT_COLORS = ['#0000FF','#008000','#FF0000','#FFFFFF','#000000','#FFFF00','#FFC0CB','#FFA500'];
     const DEFAULT_NAMES = ['Jugador 1','Jugador 2','Jugador 3','Jugador 4','Jugador 5','Jugador 6','Jugador 7','Jugador 8'];
@@ -651,7 +650,8 @@
     const state = {
       running: false,
       paused: false,
-      current: 0,
+      current: null,
+      turnActive: false,
       timers: [],
       turnCount: [],
       timeoutCount: [],
@@ -894,7 +894,6 @@
         const row = document.createElement('div');
         row.className = 'player-editor';
         row.innerHTML = `
-          <div class="order-pill">${index + 1}</div>
           <input class="name-input" type="text" maxlength="18" value="${escapeHtml(player.name)}" aria-label="Nombre de ${player.name}">
           <input type="color" value="${player.color}" aria-label="Color de ${player.name}">
           <div class="move-col">
@@ -966,7 +965,8 @@
     function startGame() {
       state.running = true;
       state.paused = false;
-      state.current = 0;
+      state.current = null;
+      state.turnActive = false;
       state.timers = activePlayers().map(() => cfg.time);
       state.turnCount = activePlayers().map(() => 0);
       state.timeoutCount = activePlayers().map(() => 0);
@@ -989,6 +989,7 @@
       clearInterval(ticker);
       ticker = setInterval(() => {
         if (!state.running || state.paused) return;
+        if (state.current === null || !state.turnActive) return;
         const index = state.current;
         state.timers[index] = Math.max(0, state.timers[index] - 1);
         if (state.timers[index] === 0) {
@@ -1017,20 +1018,22 @@
       updateStatus(`${activePlayers()[index].name} se quedo sin tiempo. Se reinicio su reloj y su turno sigue activo.`);
     }
 
-    function passTurn(index) {
-      if (!state.running || state.paused || index !== state.current) return;
+    function togglePlayerTurn(index) {
+      if (!state.running || state.paused) return;
+      if (state.turnActive && index !== state.current) return;
       stopLowTimeAlert();
-      state.timers[index] += cfg.inc;
-      state.turnCount[index] += 1;
-      state.current = nextIndex(index);
-      state.flashId = state.current;
+      if (!state.turnActive || state.current !== index) {
+        state.current = index;
+        state.turnActive = true;
+        state.flashId = state.current;
+      } else {
+        state.timers[index] += cfg.inc;
+        state.turnCount[index] += 1;
+        state.turnActive = false;
+      }
       renderPlayers();
       updateStatus();
       requestWakeLock();
-    }
-
-    function nextIndex(index) {
-      return (index + 1) % cfg.players;
     }
 
     function renderPlayers() {
@@ -1041,16 +1044,9 @@
       list.classList.add('has-active-focus');
       list.innerHTML = '';
 
-      const orderedPlayers = activePlayers().map((player, index) => ({ player, index }));
-      orderedPlayers.sort((a, b) => {
-        if (a.index === state.current) return -1;
-        if (b.index === state.current) return 1;
-        return a.index - b.index;
-      });
-
-      orderedPlayers.forEach(({ player, index }) => {
+      activePlayers().forEach((player, index) => {
         const card = document.createElement('button');
-        const isCurrent = index === state.current;
+        const isCurrent = state.turnActive && index === state.current;
         const timeouts = state.timeoutCount[index] || 0;
         const seconds = state.timers[index] || cfg.time;
         const textTone = pickTextColor(player.color);
@@ -1061,12 +1057,11 @@
         card.style.background = `linear-gradient(160deg, ${hexToRgba(player.color, 0.92)}, ${hexToRgba(darken(player.color, 18), 0.98)})`;
         card.style.color = textTone;
         card.setAttribute('aria-label', `Pasar turno a ${player.name}`);
-        card.addEventListener('click', () => passTurn(index));
+        card.addEventListener('click', () => togglePlayerTurn(index));
 
         card.innerHTML = `
           <div class="player-top">
             <div class="player-meta">
-              <div class="order-tag">Orden ${index + 1}</div>
               ${isCurrent ? '<div class="current-tag">Turno actual</div>' : `<div class="increment-tag">${formatIncrement(cfg.inc)}</div>`}
             </div>
             <div class="timeout-tag">Agotados ${timeouts}</div>
@@ -1074,7 +1069,7 @@
           <div class="player-name">${escapeHtml(player.name)}</div>
           <div class="player-bottom">
             <div class="player-sub">
-              <span>${isCurrent ? 'Toca aqui para pasar' : 'Esperando su turno'}</span>
+              <span>${isCurrent ? 'Toca para finalizar turno (+incremento)' : 'Toca para iniciar turno'}</span>
             </div>
             <div class="player-clock">${fmtClock(seconds)}</div>
           </div>
@@ -1092,6 +1087,7 @@
     }
 
     function updateCurrentPlayerClock() {
+      if (state.current === null) return;
       const card = $('playersList').querySelector(`.player-card[data-player-index="${state.current}"]`);
       if (!card) return;
       const clock = card.querySelector('.player-clock');
@@ -1126,10 +1122,14 @@
         $('statusBar').textContent = message;
         return;
       }
-      const currentPlayer = activePlayers()[state.current];
+      const currentPlayer = state.current !== null ? activePlayers()[state.current] : null;
+      $('activeClockBar').textContent = (state.turnActive && currentPlayer)
+        ? `${fmtClock(state.timers[state.current])} · Turno de ${currentPlayer.name}`
+        : '--:-- · Sin turno activo';
+      $('activePlayerLabel').textContent = state.turnActive && currentPlayer ? currentPlayer.name : 'Ninguno';
       $('statusBar').textContent = state.paused
-        ? `Pausa activa. Turno retenido por ${currentPlayer.name}`
-        : `Turno de ${currentPlayer.name}. Orden ${state.current + 1}.`;
+        ? `Pausa activa. ${state.turnActive && currentPlayer ? `Turno retenido por ${currentPlayer.name}` : 'Sin turno activo'}`
+        : (state.turnActive && currentPlayer ? `Turno activo de ${currentPlayer.name}.` : 'Toca el nombre de un jugador para iniciar su turno.');
     }
 
     function togglePause(forceState) {
@@ -1142,7 +1142,6 @@
         $('pauseTimeVal').textContent = fmtClock(cfg.time);
         $('pauseIncSlider').value = String(cfg.inc);
         $('pauseIncVal').textContent = formatIncrement(cfg.inc);
-        renderPauseOrderEditor();
         showPauseOverlay();
         stopLowTimeAlert();
         releaseWakeLock();
@@ -1161,7 +1160,8 @@
       releaseWakeLock();
       state.running = false;
       state.paused = false;
-      state.current = 0;
+      state.current = null;
+      state.turnActive = false;
       state.timers = [];
       state.turnCount = [];
       state.timeoutCount = [];
@@ -1180,42 +1180,13 @@
       $('pauseOverlay').classList.remove('show');
     }
 
-    function renderPauseOrderEditor() {
-      const list = $('pauseOrderList');
-      if (!list) return;
-      list.innerHTML = '';
-      if (!state.running || !state.paused) {
-        const note = document.createElement('div');
-        note.className = 'inline-note';
-        note.textContent = 'Pausa la partida para editar el orden.';
-        list.appendChild(note);
-        return;
-      }
-
-      activePlayers().forEach((player, index) => {
-        const row = document.createElement('div');
-        row.className = 'player-editor';
-        row.innerHTML = `
-          <div class="order-pill">${index + 1}</div>
-          <input class="name-input" type="text" value="${escapeHtml(player.name)}" disabled>
-          <div class="move-col" style="grid-column:auto">
-            <button class="mini-btn" type="button"${index === 0 ? ' disabled' : ''}>▲</button>
-            <button class="mini-btn" type="button"${index === cfg.players - 1 ? ' disabled' : ''}>▼</button>
-          </div>
-        `;
-        const upBtn = row.querySelectorAll('.mini-btn')[0];
-        const downBtn = row.querySelectorAll('.mini-btn')[1];
-        upBtn.addEventListener('click', () => movePlayer(index, index - 1));
-        downBtn.addEventListener('click', () => movePlayer(index, index + 1));
-        list.appendChild(row);
-      });
-    }
 
     function evaluateLowTimeAlert() {
       if (!state.running || state.paused) {
         stopLowTimeAlert();
         return;
       }
+      if (state.current === null || !state.turnActive) return;
       const remaining = state.timers[state.current] ?? 0;
       if (remaining > 0 && remaining <= ALERT_THRESHOLD_SECONDS) {
         startLowTimeAlert();
