@@ -241,6 +241,10 @@
       opacity:.82;
       filter:saturate(.72);
     }
+    #playersList.no-active-layout{
+      height:100%;
+      grid-auto-rows:1fr;
+    }
     #app.turn-focus #playersList.has-active-focus .player-card:not(.active){
       min-height:0;
       max-height:none;
@@ -452,6 +456,9 @@
       #playersList.three,#playersList.four,#playersList.five,#playersList.six{grid-template-columns:repeat(2,1fr)}
       #playersList.seven,#playersList.eight{grid-template-columns:repeat(2,1fr)}
       #app.turn-focus #playersList{grid-template-columns:1fr !important}
+      #playersList.no-active-layout{
+        grid-template-columns:repeat(2,minmax(0,1fr));
+      }
     }
     @media (max-width:700px){
       #root{padding:max(10px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom))}
@@ -464,6 +471,10 @@
       .status-bar,.summary-card{min-height:48px;padding:8px 10px}
       .summary-value{font-size:20px}
       #playersList{grid-auto-rows:minmax(120px,auto)}
+      #playersList.no-active-layout{
+        grid-template-columns:1fr;
+        grid-auto-rows:1fr;
+      }
       #playersList.has-active-focus .player-card:not(.active){min-height:92px;max-height:132px}
       .player-card{padding:12px;border-radius:18px}
       .player-card.active{min-height:min(74vh, 640px)}
@@ -545,6 +556,18 @@
 
         <div class="config-card">
           <div class="config-row">
+            <span class="config-label">Historial de partidas</span>
+            <span class="inline-note">Estadísticas locales</span>
+          </div>
+          <div class="group-row" style="grid-template-columns:1fr auto">
+            <select class="group-select" id="matchSelect" aria-label="Seleccionar partida guardada"></select>
+            <button class="overlay-btn" id="viewMatchBtn" type="button">Ver</button>
+          </div>
+          <div class="inline-note" id="matchStatus">Sin partidas guardadas</div>
+        </div>
+
+        <div class="config-card">
+          <div class="config-row">
             <span class="config-label">Nombres y color</span>
             <span class="inline-note">Editables</span>
           </div>
@@ -573,19 +596,21 @@
         <div class="status-bar" id="statusBar">Toca el nombre de un jugador para iniciar su turno</div>
       </div>
 
-      <div class="status-wrap">
-        <div class="status-bar" id="activeClockBar">--:-- · Sin turno activo</div>
-        <div class="summary-card">
-          <div class="summary-label">Jugador activo</div>
-          <div class="summary-value" id="activePlayerLabel">Ninguno</div>
-        </div>
-      </div>
-
       <div id="playersList"></div>
 
       <div class="timeout-feed" id="timeoutFeed"></div>
       <footer class="app-footer" id="appFooter">Version</footer>
     </section>
+  </div>
+
+  <div class="overlay" id="statsOverlay">
+    <div class="overlay-card">
+      <div class="overlay-head">
+        <div class="overlay-title">Estadísticas guardadas</div>
+        <button class="overlay-btn" id="closeStatsBtn">Cerrar</button>
+      </div>
+      <div class="setting-card" id="statsContent">Selecciona una partida guardada.</div>
+    </div>
   </div>
 
   <div class="overlay" id="pauseOverlay">
@@ -634,6 +659,7 @@
     const MAX_GROUPS = 30;
     const ALERT_THRESHOLD_SECONDS = 15;
     const ALERT_AUDIO_SRC = './alarm.mp3';
+    const MATCHES_STORAGE_KEY = 'bgt.savedMatches.v1';
 
     const cfg = {
       time: 90,
@@ -658,7 +684,10 @@
       timeoutFeed: [],
       flashId: null,
       savedGroups: [],
-      selectedGroupId: null
+      selectedGroupId: null,
+      savedMatches: [],
+      selectedMatchId: null,
+      gameLog: null
     };
 
     let ticker = null;
@@ -711,7 +740,41 @@
 
       loadSavedGroups();
       renderSavedGroups();
+      loadSavedMatches();
+      renderSavedMatches();
       renderPlayerEditors();
+    }
+    function loadSavedMatches() {
+      try {
+        const raw = localStorage.getItem(MATCHES_STORAGE_KEY);
+        state.savedMatches = raw ? JSON.parse(raw) : [];
+      } catch (error) {
+        state.savedMatches = [];
+      }
+    }
+    function persistSavedMatches() {
+      localStorage.setItem(MATCHES_STORAGE_KEY, JSON.stringify(state.savedMatches.slice(0, 50)));
+    }
+    function renderSavedMatches() {
+      const select = $('matchSelect');
+      select.innerHTML = '';
+      if (!state.savedMatches.length) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No hay partidas';
+        select.appendChild(option);
+        $('matchStatus').textContent = 'Sin partidas guardadas';
+        return;
+      }
+      state.savedMatches.forEach(match => {
+        const option = document.createElement('option');
+        option.value = match.id;
+        option.textContent = `${new Date(match.savedAt).toLocaleString()} (${match.players.length} jugadores)`;
+        select.appendChild(option);
+      });
+      state.selectedMatchId = state.savedMatches[0].id;
+      select.value = state.selectedMatchId;
+      $('matchStatus').textContent = `${state.savedMatches.length} partidas guardadas`;
     }
 
     function loadSavedGroups() {
@@ -972,6 +1035,13 @@
       state.timeoutCount = activePlayers().map(() => 0);
       state.timeoutFeed = [];
       state.flashId = null;
+      state.gameLog = {
+        id: makeGroupId(),
+        startedAt: Date.now(),
+        turnEvents: [],
+        players: activePlayers().map(player => ({ name: player.name, color: player.color })),
+        totalSecondsUsed: activePlayers().map(() => 0)
+      };
       $('setup').style.display = 'none';
       $('app').style.display = 'flex';
       $('pauseBtn').textContent = 'Pausar';
@@ -996,6 +1066,7 @@
           handleTimeout(index);
           return;
         }
+        state.gameLog.totalSecondsUsed[index] += 1;
         updateCurrentPlayerClock();
         evaluateLowTimeAlert();
       }, 1000);
@@ -1026,10 +1097,12 @@
         state.current = index;
         state.turnActive = true;
         state.flashId = state.current;
+        state.gameLog.turnEvents.push({ type: 'start', playerIndex: index, at: Date.now() });
       } else {
         state.timers[index] += cfg.inc;
         state.turnCount[index] += 1;
         state.turnActive = false;
+        state.gameLog.turnEvents.push({ type: 'end', playerIndex: index, at: Date.now() });
       }
       renderPlayers();
       updateStatus();
@@ -1041,7 +1114,8 @@
       list.className = '';
       const words = ['zero','one','two','three','four','five','six','seven','eight'];
       list.classList.add(words[cfg.players]);
-      list.classList.add('has-active-focus');
+      list.classList.toggle('has-active-focus', state.turnActive && state.current !== null);
+      list.classList.toggle('no-active-layout', !state.turnActive);
       list.innerHTML = '';
 
       activePlayers().forEach((player, index) => {
@@ -1123,10 +1197,6 @@
         return;
       }
       const currentPlayer = state.current !== null ? activePlayers()[state.current] : null;
-      $('activeClockBar').textContent = (state.turnActive && currentPlayer)
-        ? `${fmtClock(state.timers[state.current])} · Turno de ${currentPlayer.name}`
-        : '--:-- · Sin turno activo';
-      $('activePlayerLabel').textContent = state.turnActive && currentPlayer ? currentPlayer.name : 'Ninguno';
       $('statusBar').textContent = state.paused
         ? `Pausa activa. ${state.turnActive && currentPlayer ? `Turno retenido por ${currentPlayer.name}` : 'Sin turno activo'}`
         : (state.turnActive && currentPlayer ? `Turno activo de ${currentPlayer.name}.` : 'Toca el nombre de un jugador para iniciar su turno.');
@@ -1155,6 +1225,35 @@
     }
 
     function resetGame() {
+      if (state.running) {
+        const shouldSave = confirm('¿Quieres guardar esta partida en estadísticas locales antes de salir?');
+        finishGame(shouldSave);
+      }
+      doResetUI();
+    }
+
+    function finishGame(save) {
+      if (!state.gameLog) return;
+      state.gameLog.endedAt = Date.now();
+      state.gameLog.turnCount = [...state.turnCount];
+      state.gameLog.timeoutCount = [...state.timeoutCount];
+      if (save) {
+        state.savedMatches.unshift({
+          id: state.gameLog.id,
+          savedAt: Date.now(),
+          startedAt: state.gameLog.startedAt,
+          endedAt: state.gameLog.endedAt,
+          players: state.gameLog.players,
+          turnCount: state.gameLog.turnCount,
+          timeoutCount: state.gameLog.timeoutCount,
+          totalSecondsUsed: state.gameLog.totalSecondsUsed
+        });
+        persistSavedMatches();
+        renderSavedMatches();
+      }
+    }
+
+    function doResetUI() {
       clearInterval(ticker);
       stopLowTimeAlert();
       releaseWakeLock();
@@ -1166,10 +1265,26 @@
       state.turnCount = [];
       state.timeoutCount = [];
       state.timeoutFeed = [];
+      state.gameLog = null;
       $('setup').style.display = 'flex';
       $('app').style.display = 'none';
       $('app').classList.remove('turn-focus');
       closePauseOverlay();
+    }
+    function openSelectedMatch() {
+      const selected = state.savedMatches.find(match => match.id === $('matchSelect').value);
+      if (!selected) return;
+      const totalTimeouts = selected.timeoutCount.reduce((sum, item) => sum + item, 0);
+      const perPlayer = selected.players.map((player, index) =>
+        `${player.name}: turnos ${selected.turnCount[index] || 0}, agotados ${selected.timeoutCount[index] || 0}, tiempo ${fmtClock(selected.totalSecondsUsed[index] || 0)}`
+      ).join('<br>');
+      $('statsContent').innerHTML = `
+        <div><strong>Inicio:</strong> ${new Date(selected.startedAt).toLocaleString()}</div>
+        <div><strong>Fin:</strong> ${new Date(selected.endedAt).toLocaleString()}</div>
+        <div><strong>Total agotados:</strong> ${totalTimeouts}</div>
+        <div style="margin-top:8px">${perPlayer}</div>
+      `;
+      $('statsOverlay').classList.add('show');
     }
 
     function showPauseOverlay() {
@@ -1331,6 +1446,9 @@
     $('closeOverlayBtn').addEventListener('click', closePauseOverlay);
     $('resetBtn').addEventListener('click', resetGame);
     $('fullscreenBtn').addEventListener('click', toggleFullscreen);
+    $('matchSelect').addEventListener('change', event => { state.selectedMatchId = event.target.value || null; });
+    $('viewMatchBtn').addEventListener('click', openSelectedMatch);
+    $('closeStatsBtn').addEventListener('click', () => $('statsOverlay').classList.remove('show'));
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && state.running && !state.paused) {
