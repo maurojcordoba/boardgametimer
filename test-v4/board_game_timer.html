@@ -494,12 +494,12 @@
         <div class="config-card">
           <div class="config-row">
             <span class="config-label">Tiempo por jugador</span>
-            <span class="config-val" id="timeVal">05:00</span>
+            <span class="config-val" id="timeVal">01:30</span>
           </div>
-          <input type="range" id="timeSlider" min="1" max="60" value="5" step="1">
+          <input type="range" id="timeSlider" min="0.5" max="10" value="1.5" step="0.5">
           <div class="config-row" style="margin-top:8px">
-            <span class="inline-note">1 min</span>
-            <span class="inline-note">60 min</span>
+            <span class="inline-note">30 seg</span>
+            <span class="inline-note">10 min</span>
           </div>
         </div>
 
@@ -508,10 +508,10 @@
             <span class="config-label">Incremento por turno</span>
             <span class="config-val" id="incVal">+5s</span>
           </div>
-          <input type="range" id="incSlider" min="0" max="60" value="5" step="1">
+          <input type="range" id="incSlider" min="0" max="30" value="5" step="1">
           <div class="config-row" style="margin-top:8px">
             <span class="inline-note">0s</span>
-            <span class="inline-note">60s</span>
+            <span class="inline-note">30s</span>
           </div>
         </div>
 
@@ -599,9 +599,9 @@
         <div class="setting-card">
           <div class="config-row">
             <span class="config-label">Tiempo por jugador</span>
-            <span class="config-val" id="pauseTimeVal">05:00</span>
+            <span class="config-val" id="pauseTimeVal">01:30</span>
           </div>
-          <input type="range" id="pauseTimeSlider" min="1" max="60" value="5" step="1">
+          <input type="range" id="pauseTimeSlider" min="0.5" max="10" value="1.5" step="0.5">
           <div class="wake-text">Durante la pausa, este cambio ajusta todos los relojes por la misma diferencia para mantener la ventaja o desventaja acumulada.</div>
         </div>
 
@@ -610,7 +610,7 @@
             <span class="config-label">Incremento por turno</span>
             <span class="config-val" id="pauseIncVal">+5s</span>
           </div>
-          <input type="range" id="pauseIncSlider" min="0" max="60" value="5" step="1">
+          <input type="range" id="pauseIncSlider" min="0" max="30" value="5" step="1">
           <div class="wake-text">Este ajuste se puede cambiar durante la pausa y se aplica desde el siguiente pase de turno.</div>
         </div>
 
@@ -629,15 +629,15 @@
     const DEFAULT_COLORS = ['#0000FF','#008000','#FF0000','#FFFFFF','#000000','#FFFF00','#FFC0CB','#FFA500'];
     const DEFAULT_NAMES = ['Jugador 1','Jugador 2','Jugador 3','Jugador 4','Jugador 5','Jugador 6','Jugador 7','Jugador 8'];
     const MAX_PLAYERS = 8;
-    const APP_VERSION = 'v1.0.6';
+    const APP_VERSION = 'v1.0.7';
     const GROUPS_STORAGE_KEY = 'bgt.savedGroups.v1';
     const MAX_GROUPS = 30;
     const ALERT_THRESHOLD_SECONDS = 15;
     const ALERT_AUDIO_SRC = './alarm.mp3';
 
     const cfg = {
-      time: 3 * 60,
-      inc: 30,
+      time: 90,
+      inc: 5,
       players: 4
     };
 
