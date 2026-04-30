@@ -383,17 +383,8 @@
       letter-spacing:1px;
       text-transform:uppercase;
     }
-    .app-footer{
-      padding:4px 2px 0;
-      text-align:center;
-      font-size:11px;
-      color:var(--muted);
-      letter-spacing:1px;
-      text-transform:uppercase;
-    }
     #app.turn-focus .status-wrap,
-    #app.turn-focus .timeout-feed,
-    #app.turn-focus .app-footer{
+    #app.turn-focus .timeout-feed{
       display:none;
     }
     #app.turn-focus .top-bar{
@@ -610,7 +601,6 @@
       <div id="playersList"></div>
 
       <div class="timeout-feed" id="timeoutFeed"></div>
-      <footer class="app-footer" id="appFooter">Version</footer>
     </section>
   </div>
 
@@ -665,6 +655,13 @@
           </div>
           <div class="wake-text">Activa o desactiva el sonido cuando queden pocos segundos de turno.</div>
           <button class="overlay-btn" id="toggleSoundBtn" type="button">Desactivar sonido</button>
+        </div>
+        <div class="setting-card">
+          <div class="config-row">
+            <span class="config-label">Versión</span>
+            <span class="config-val" id="settingsVersion">--</span>
+          </div>
+          <div class="wake-text">Versión actual de la aplicación.</div>
         </div>
 
       </div>
@@ -757,7 +754,7 @@
     }
 
     function initSetup() {
-      $('appFooter').textContent = `Version ${APP_VERSION}`;
+      $('settingsVersion').textContent = APP_VERSION;
       $('timeVal').textContent = fmtClock(cfg.time);
       $('pauseTimeVal').textContent = fmtClock(cfg.time);
       $('incVal').textContent = formatIncrement(cfg.inc);
